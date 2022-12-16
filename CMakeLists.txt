@@ -38,22 +38,7 @@ set(LLVM_LINK_COMPONENTS
   Support
   )
 
-# the main executable
-add_subdirectory(tool)
-
-# the specific aliceO2 checker code
-add_subdirectory(aliceO2)
-# the specific reporting tools code
-add_subdirectory(reporting)
-
 # plugin
 add_subdirectory(plugin)
-
-# for testing
-add_subdirectory(test)
-
-# some extra utilities
-add_subdirectory(utility)
-
 
 endif()

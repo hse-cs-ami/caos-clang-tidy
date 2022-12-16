@@ -20,7 +20,6 @@ namespace plugin {
 class PluginModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
-    std::cerr << "side effect \n";
     CheckFactories.registerCheck<FooCheck>(
         "plugin-Foo");
   }
@@ -32,17 +31,5 @@ public:
 static ClangTidyModuleRegistry::Add<plugin::PluginModule>
 X("pluginO2-module", "Adds Plugin specific checks");
 
-// This anchor is used to force the linker to link in the generated object file
-// and thus register the PluginModule.
-volatile int PluginModuleAnchorSource = 0;
-
 } // namespace tidy
 } // namespace clang
-
-
-// A function to execute upon load of shared library
-//__attribute__((constructor))
-static int huhuhuhuhu() {
-  static clang::tidy::plugin::PluginModule module;
-  return clang::tidy::PluginModuleAnchorSource;
-}

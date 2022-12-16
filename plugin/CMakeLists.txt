@@ -4,6 +4,7 @@ add_clang_library(clangTidyPluginModule
   SHARED
 
   FooCheck.cpp
+  MagicNumbersCheck.cpp
   PluginTidyModule.cpp
 
   LINK_LIBS

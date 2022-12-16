@@ -11,6 +11,7 @@
 #include "../clang-tidy/ClangTidyModule.h"
 #include "../clang-tidy/ClangTidyModuleRegistry.h"
 #include "FooCheck.h"
+#include "MagicNumbersCheck.h"
 #include <iostream>
 
 namespace clang {
@@ -22,6 +23,8 @@ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<FooCheck>(
         "plugin-Foo");
+    CheckFactories.registerCheck<MagicNumbersCheck>(
+        "plugin-magic-numbers");
   }
 };
 

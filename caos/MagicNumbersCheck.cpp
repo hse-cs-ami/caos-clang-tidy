@@ -55,7 +55,7 @@ static bool isUsedToDefineABitField(const MatchFinder::MatchResult &Result,
 }
 
 namespace tidy {
-namespace plugin {
+namespace caos {
 
 const char DefaultIgnoredIntegerValues[] = "1;2;3;4;";
 const char DefaultIgnoredFloatingPointValues[] = "1.0;100.0;";
@@ -225,6 +225,6 @@ bool MagicNumbersCheck::isBitFieldWidth(
                       });
 }
 
-} // namespace plugin
+} // namespace caos
 } // namespace tidy
 } // namespace clang

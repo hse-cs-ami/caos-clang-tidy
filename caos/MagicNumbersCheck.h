@@ -16,7 +16,7 @@
 
 namespace clang {
 namespace tidy {
-namespace plugin {
+namespace caos {
 
 /// Detects magic numbers, integer and floating point literals embedded in code.
 ///
@@ -102,7 +102,7 @@ private:
       IgnoredDoublePointValues;
 };
 
-} // namespace plugin
+} // namespace caos
 } // namespace tidy
 } // namespace clang
 

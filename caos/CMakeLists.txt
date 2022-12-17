@@ -1,11 +1,10 @@
 set(LLVM_LINK_COMPONENTS support)
 
-add_clang_library(clangTidyPluginModule
+add_clang_library(clangTidyCaosModule
   SHARED
 
-  FooCheck.cpp
   MagicNumbersCheck.cpp
-  PluginTidyModule.cpp
+  CaosTidyModule.cpp
 
   LINK_LIBS
   clangAST

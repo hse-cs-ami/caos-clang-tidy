@@ -10,7 +10,7 @@ endif()
 
 
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
-  project(O2CodeChecker)
+    project(CaosChecker)
 
 
   # find clang + llvm
@@ -38,7 +38,6 @@ set(LLVM_LINK_COMPONENTS
   Support
   )
 
-# plugin
-add_subdirectory(plugin)
+add_subdirectory(caos)
 
 endif()

@@ -1,18 +1,22 @@
-# O2CodeChecker
-A prototype for a standalone code checker for the AliceO2 project
+Custom clang-tidy module for HSE AMI CAOS course (2022-2023).
 
-It offers:
-  * code checks based on clang-tidy and existing components
-  * standalone CMake infrastructure for compilation outside of llvm/clang source tree
+This repository is based on [AliceO2Group/O2CodeChecker](https://github.com/AliceO2Group/O2CodeChecker)
 
-# Requirements/Building
+## Building
 
-  * llvm + clang + clang extra tools (release 3_9) required
-    * (recommended to use `alibuild build clang` which will give you the right version)
-  * build using `cmake -DLLVM_DIR=PATH_TO_LLVM_CMAKE_CONFIG -DClang_DIR=PATH_TO_CLANG_CONFIG`
+### Prerequisites
 
-# Usage
+- clang-15
+- clang-tidy-15
+- libclang-15-dev
 
-In the build directory of AliceO2 (containing the CMake compilations database in form of `compile_command.json`), run
+```shell
+./prepare.sh
+./build.sh
+```
 
-    run_O2CodeChecker.py -clang-tidy-binary `which O2codecheck` -checks=*,alice*
+## Running
+
+```shell
+LD_PRELOAD=$PWD/build/caos/libclangTidyCaosModule.so clang-tidy --config="{WarningsAsErrors: '*'}" --checks="caos-magic-numbers" test/main.c
+```

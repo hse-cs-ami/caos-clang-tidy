@@ -10,29 +10,26 @@
 #include "../clang-tidy/ClangTidy.h"
 #include "../clang-tidy/ClangTidyModule.h"
 #include "../clang-tidy/ClangTidyModuleRegistry.h"
-#include "FooCheck.h"
 #include "MagicNumbersCheck.h"
 #include <iostream>
 
 namespace clang {
 namespace tidy {
-namespace plugin {
+namespace caos {
 
-class PluginModule : public ClangTidyModule {
+class CaosModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
-    CheckFactories.registerCheck<FooCheck>(
-        "plugin-Foo");
     CheckFactories.registerCheck<MagicNumbersCheck>(
-        "plugin-magic-numbers");
+        "caos-magic-numbers");
   }
 };
 
-} // namespace plugin
+} // namespace caos
 
-// Register the PluginTidyModule using this statically initialized variable.
-static ClangTidyModuleRegistry::Add<plugin::PluginModule>
-X("pluginO2-module", "Adds Plugin specific checks");
+// Register the CaosModule using this statically initialized variable.
+static ClangTidyModuleRegistry::Add<caos::CaosModule>
+X("caos-module", "Adds custom checks for CAOS course");
 
 } // namespace tidy
 } // namespace clang

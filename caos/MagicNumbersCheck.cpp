@@ -11,6 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+// This is a modified version of MagicNumbersCheck.cpp from clang-tools-extra/clang-tidy release 15.0.6
+// If this check is used for C, it doesn't consider const-qualified variables as constants.
+
 #include "MagicNumbersCheck.h"
 #include "../clang-tidy/utils/OptionsUtils.h"
 #include "clang/AST/ASTContext.h"
@@ -23,12 +26,12 @@ using namespace clang::ast_matchers;
 namespace clang {
 
 static bool isUsedToInitializeAConstant(const MatchFinder::MatchResult &Result,
-                                        const DynTypedNode &Node) {
+                                        const DynTypedNode &Node, bool LangIsCpp) {
 
   const auto *AsDecl = Node.get<DeclaratorDecl>();
   if (AsDecl) {
     if (AsDecl->getType().isConstQualified())
-      return true;
+      return LangIsCpp;
 
     return AsDecl->isImplicit();
   }
@@ -37,8 +40,8 @@ static bool isUsedToInitializeAConstant(const MatchFinder::MatchResult &Result,
     return true;
 
   return llvm::any_of(Result.Context->getParents(Node),
-                      [&Result](const DynTypedNode &Parent) {
-                        return isUsedToInitializeAConstant(Result, Parent);
+                      [&Result, LangIsCpp](const DynTypedNode &Parent) {
+                        return isUsedToInitializeAConstant(Result, Parent, LangIsCpp);
                       });
 }
 
@@ -138,8 +141,8 @@ bool MagicNumbersCheck::isConstant(const MatchFinder::MatchResult &Result,
                                    const Expr &ExprResult) const {
   return llvm::any_of(
       Result.Context->getParents(ExprResult),
-      [&Result](const DynTypedNode &Parent) {
-        if (isUsedToInitializeAConstant(Result, Parent))
+      [this, &Result](const DynTypedNode &Parent) {
+        if (isUsedToInitializeAConstant(Result, Parent, getLangOpts().CPlusPlus))
           return true;
 
         // Ignore this instance, because this matches an

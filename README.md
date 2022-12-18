@@ -18,7 +18,7 @@ This repository is based on [AliceO2Group/O2CodeChecker](https://github.com/Alic
 ## Running
 
 ```shell
-LD_PRELOAD=$PWD/build/caos/libclangTidyCaosModule.so clang-tidy \
+ clang-tidy --load $PWD/build/caos/libclangTidyCaosModule.so \
   --config="{WarningsAsErrors: '*', CheckOptions: {caos-identifier-naming.UnionCase: CamelCase, caos-identifier-naming.StructCase: CamelCase}}" \
   --checks="caos-magic-numbers,caos-identifier-naming" \
   test/main.c

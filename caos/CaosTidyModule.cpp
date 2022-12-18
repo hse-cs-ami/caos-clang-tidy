@@ -11,6 +11,7 @@
 #include "../clang-tidy/ClangTidyModule.h"
 #include "../clang-tidy/ClangTidyModuleRegistry.h"
 #include "MagicNumbersCheck.h"
+#include "IdentifierNamingCheck.h"
 #include <iostream>
 
 namespace clang {
@@ -22,6 +23,8 @@ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<MagicNumbersCheck>(
         "caos-magic-numbers");
+    CheckFactories.registerCheck<IdentifierNamingCheck>(
+        "caos-identifier-naming");
   }
 };
 

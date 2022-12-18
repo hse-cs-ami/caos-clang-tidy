@@ -1142,6 +1142,26 @@ StyleKind IdentifierNamingCheck::findStyleKind(
     return SK_Invalid;
   }
 
+  // C records (CXXRecordDecl is a subclass of RecordDecl, so this check must be placed after CXXRecordDecl)
+  if (const auto *Decl = dyn_cast<RecordDecl>(D)) {
+    if (Decl->isAnonymousStructOrUnion())
+      return SK_Invalid;
+
+    if (!Decl->getCanonicalDecl()->isThisDeclarationADefinition())
+      return SK_Invalid;
+
+    if (Decl->isStruct() && NamingStyles[SK_Struct])
+      return SK_Struct;
+
+    if (Decl->isUnion() && NamingStyles[SK_Union])
+      return SK_Union;
+
+    if (Decl->isEnum() && NamingStyles[SK_Enum])
+      return SK_Enum;
+
+    return SK_Invalid;
+  }
+
   if (const auto *Decl = dyn_cast<FieldDecl>(D)) {
     QualType Type = Decl->getType();
 

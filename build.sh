@@ -6,4 +6,4 @@ set -eu
 # (clang::tidy::ClangTidyCheck::OptionsView::(store,get)<bool> are not found by linker)
 cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_COMPILER=clang++
 cd build
-make -j2 clangTidyCaosModule
+make -j $(nproc) clangTidyCaosModule

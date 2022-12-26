@@ -26,7 +26,8 @@ using namespace clang::ast_matchers;
 namespace clang {
 
 static bool isUsedToInitializeAConstant(const MatchFinder::MatchResult &Result,
-                                        const DynTypedNode &Node, bool LangIsCpp) {
+                                        const DynTypedNode &Node,
+                                        bool LangIsCpp) {
 
   const auto *AsDecl = Node.get<DeclaratorDecl>();
   if (AsDecl) {
@@ -57,6 +58,26 @@ static bool isUsedToDefineABitField(const MatchFinder::MatchResult &Result,
                       });
 }
 
+static bool isUsedAsStrtolBase(const MatchFinder::MatchResult &Result,
+                               const DynTypedNode &Node) {
+  const auto *AsCallExpr = Node.get<CallExpr>();
+  if (!AsCallExpr) {
+    // In some cases a node can have multiple parents, so it's better to check all of them
+    // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
+    return llvm::any_of(Result.Context->getParents(Node),
+                        [&Result](const DynTypedNode &Parent) {
+                          return isUsedAsStrtolBase(Result, Parent);
+                        });
+  }
+  const auto *FuncRef = dyn_cast<DeclRefExpr>(AsCallExpr->getCallee()->IgnoreImpCasts());
+  if (!FuncRef) { // not sure if this can happen, better check to be safe
+    return false;
+  }
+  StringRef FuncName = FuncRef->getDecl()->getName();
+  // literals are allowed in any argument of strtol(l) to simplify implementation.
+  return FuncName == "strtol" || FuncName == "strtoll";
+}
+
 namespace tidy {
 namespace caos {
 
@@ -70,6 +91,7 @@ MagicNumbersCheck::MagicNumbersCheck(StringRef Name, ClangTidyContext *Context)
       IgnoreBitFieldsWidths(Options.get("IgnoreBitFieldsWidths", true)),
       IgnorePowersOf2IntegerValues(
           Options.get("IgnorePowersOf2IntegerValues", false)),
+      IgnoreStrtolBases(Options.get("IgnoreStrtolBases", true)),
       RawIgnoredIntegerValues(
           Options.get("IgnoredIntegerValues", DefaultIgnoredIntegerValues)),
       RawIgnoredFloatingPointValues(Options.get(
@@ -118,6 +140,7 @@ void MagicNumbersCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "IgnoreBitFieldsWidths", IgnoreBitFieldsWidths);
   Options.store(Opts, "IgnorePowersOf2IntegerValues",
                 IgnorePowersOf2IntegerValues);
+  Options.store(Opts, "IgnoreStrtolBases", IgnoreStrtolBases);
   Options.store(Opts, "IgnoredIntegerValues", RawIgnoredIntegerValues);
   Options.store(Opts, "IgnoredFloatingPointValues",
                 RawIgnoredFloatingPointValues);
@@ -225,6 +248,18 @@ bool MagicNumbersCheck::isBitFieldWidth(
          llvm::any_of(Result.Context->getParents(Literal),
                       [&Result](const DynTypedNode &Parent) {
                         return isUsedToDefineABitField(Result, Parent);
+                      });
+}
+
+bool MagicNumbersCheck::isStrtolBase(
+    const clang::ast_matchers::MatchFinder::MatchResult &Result,
+    const IntegerLiteral &Literal) const {
+  if (!IgnoreStrtolBases) {
+    return false;
+  }
+  return llvm::any_of(Result.Context->getParents(Literal),
+                      [&Result](const DynTypedNode &Parent) {
+                        return isUsedAsStrtolBase(Result, Parent);
                       });
 }
 

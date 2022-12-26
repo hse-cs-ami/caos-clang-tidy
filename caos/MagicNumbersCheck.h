@@ -9,6 +9,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_READABILITY_MAGICNUMBERSCHECK_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_READABILITY_MAGICNUMBERSCHECK_H
 
+#include <type_traits>
 #include "../clang-tidy/ClangTidyCheck.h"
 #include "clang/Lex/Lexer.h"
 #include <llvm/ADT/APFloat.h>
@@ -36,20 +37,14 @@ private:
   bool isIgnoredValue(const IntegerLiteral *Literal) const;
   bool isIgnoredValue(const FloatingLiteral *Literal) const;
 
-  bool isSyntheticValue(const clang::SourceManager *,
-                        const FloatingLiteral *) const {
-    return false;
-  }
   bool isSyntheticValue(const clang::SourceManager *SourceManager,
                         const IntegerLiteral *Literal) const;
 
-  bool isBitFieldWidth(const clang::ast_matchers::MatchFinder::MatchResult &,
-                       const FloatingLiteral &) const {
-     return false;
-  }
-
   bool isBitFieldWidth(const clang::ast_matchers::MatchFinder::MatchResult &Result,
                        const IntegerLiteral &Literal) const;
+
+  bool isStrtolBase(const clang::ast_matchers::MatchFinder::MatchResult &Result,
+                 const IntegerLiteral &Literal) const;
 
   template <typename L>
   void checkBoundMatch(const ast_matchers::MatchFinder::MatchResult &Result,
@@ -68,11 +63,16 @@ private:
     if (isConstant(Result, *MatchedLiteral))
       return;
 
-    if (isSyntheticValue(Result.SourceManager, MatchedLiteral))
-      return;
+    if constexpr (std::is_same_v<L, IntegerLiteral>) {
+      if (isSyntheticValue(Result.SourceManager, MatchedLiteral))
+        return;
 
-    if (isBitFieldWidth(Result, *MatchedLiteral))
-      return;
+      if (isBitFieldWidth(Result, *MatchedLiteral))
+        return;
+
+      if (isStrtolBase(Result, *MatchedLiteral))
+        return;
+    }
 
     const StringRef LiteralSourceText = Lexer::getSourceText(
         CharSourceRange::getTokenRange(MatchedLiteral->getSourceRange()),
@@ -86,6 +86,7 @@ private:
   const bool IgnoreAllFloatingPointValues;
   const bool IgnoreBitFieldsWidths;
   const bool IgnorePowersOf2IntegerValues;
+  const bool IgnoreStrtolBases;
   const StringRef RawIgnoredIntegerValues;
   const StringRef RawIgnoredFloatingPointValues;
 

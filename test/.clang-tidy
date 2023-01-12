@@ -1,0 +1,5 @@
+Checks: '-*,caos-magic-numbers,caos-identifier-naming'
+CheckOptions:
+  caos-magic-numbers.IgnoreStrtolBases: true
+  caos-identifier-naming.UnionCase: CamelCase
+  caos-identifier-naming.StructCase: CamelCase

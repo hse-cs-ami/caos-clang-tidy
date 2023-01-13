@@ -11,8 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-// This is a modified version of MagicNumbersCheck.cpp from clang-tools-extra/clang-tidy release 15.0.6
-// If this check is used for C, it doesn't consider const-qualified variables as constants.
+// This is a modified version of MagicNumbersCheck.cpp from
+// clang-tools-extra/clang-tidy release 15.0.6 If this check is used for C, it
+// If this check is used for C, it doesn't consider const-qualified numeric
+// variables as constants. Also integer literals may be permitter in third
+// parameter (base) of strtol(l)
 
 #include "MagicNumbersCheck.h"
 #include "../clang-tidy/utils/OptionsUtils.h"
@@ -25,24 +28,39 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 
-static bool isUsedToInitializeAConstant(const MatchFinder::MatchResult &Result,
-                                        const DynTypedNode &Node,
-                                        bool LangIsCpp) {
+static bool isUsedToInitializeAConstant(
+    const MatchFinder::MatchResult &Result, const DynTypedNode &Node,
+                                        bool LangIsCpp,
+                                        tidy::caos::MagicNumbersCheck::LiteralUsageInfo& UsageInfo) {
+  using tidy::caos::MagicNumbersCheck;
 
   const auto *AsDecl = Node.get<DeclaratorDecl>();
   if (AsDecl) {
-    if (AsDecl->getType().isConstQualified())
-      return LangIsCpp;
+    if (AsDecl->getType().isConstQualified()) {
+      UsageInfo.Category =
+          LangIsCpp ? MagicNumbersCheck::ConstCategory::TRUE_CONST
+                    : MagicNumbersCheck::ConstCategory::RUNTIME_CONST;  // TODO check initializer lists
+      return true;
+    }
 
-    return AsDecl->isImplicit();
+    if (AsDecl->isImplicit()) {
+      UsageInfo.Category = MagicNumbersCheck::ConstCategory::TRUE_CONST;
+      return true;
+    } else {
+      return false;
+    }
   }
 
-  if (Node.get<EnumConstantDecl>())
+  if (Node.get<EnumConstantDecl>()) {
+    UsageInfo.Category = MagicNumbersCheck::ConstCategory::TRUE_CONST;
     return true;
+  }
 
-  return llvm::any_of(Result.Context->getParents(Node),
-                      [&Result, LangIsCpp](const DynTypedNode &Parent) {
-                        return isUsedToInitializeAConstant(Result, Parent, LangIsCpp);
+  return llvm::any_of(
+      Result.Context->getParents(Node),
+                      [&Result, &UsageInfo, LangIsCpp](const DynTypedNode &Parent) {
+        return isUsedToInitializeAConstant(Result, Parent, LangIsCpp,
+                                           UsageInfo);
                       });
 }
 
@@ -62,19 +80,22 @@ static bool isUsedAsStrtolBase(const MatchFinder::MatchResult &Result,
                                const DynTypedNode &Node) {
   const auto *AsCallExpr = Node.get<CallExpr>();
   if (!AsCallExpr) {
-    // In some cases a node can have multiple parents, so it's better to check all of them
+    // In some cases a node can have multiple parents, so it's better to check
+    // all of them
     // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
     return llvm::any_of(Result.Context->getParents(Node),
                         [&Result](const DynTypedNode &Parent) {
                           return isUsedAsStrtolBase(Result, Parent);
                         });
   }
-  const auto *FuncRef = dyn_cast<DeclRefExpr>(AsCallExpr->getCallee()->IgnoreImpCasts());
+  const auto *FuncRef =
+      dyn_cast<DeclRefExpr>(AsCallExpr->getCallee()->IgnoreImpCasts());
   if (!FuncRef) { // not sure if this can happen, better check to be safe
     return false;
   }
   StringRef FuncName = FuncRef->getDecl()->getName();
-  // literals are allowed in any argument of strtol(l) to simplify implementation.
+  // literals are allowed in any argument of strtol(l) to simplify
+  // implementation.
   return FuncName == "strtol" || FuncName == "strtoll";
 }
 
@@ -160,39 +181,58 @@ void MagicNumbersCheck::check(const MatchFinder::MatchResult &Result) {
   checkBoundMatch<FloatingLiteral>(Result, "float");
 }
 
-bool MagicNumbersCheck::isConstant(const MatchFinder::MatchResult &Result,
-                                   const Expr &ExprResult) const {
-  return llvm::any_of(
+MagicNumbersCheck::LiteralUsageInfo MagicNumbersCheck::getUsageInfo(
+    const clang::ast_matchers::MatchFinder::MatchResult &Result,
+                                const clang::Expr &ExprResult) const {
+  LiteralUsageInfo UsageInfo;
+
+  llvm::any_of(
       Result.Context->getParents(ExprResult),
-      [this, &Result](const DynTypedNode &Parent) {
-        if (isUsedToInitializeAConstant(Result, Parent, getLangOpts().CPlusPlus))
+      [this, &Result, &UsageInfo](const DynTypedNode &Parent) {
+        if (isUsedToInitializeAConstant(Result, Parent, getLangOpts().CPlusPlus,
+                                        UsageInfo))
           return true;
 
-        // Ignore this instance, because this matches an
-        // expanded class enumeration value.
-        if (Parent.get<CStyleCastExpr>() &&
-            llvm::any_of(
-                Result.Context->getParents(Parent),
-                [](const DynTypedNode &GrandParent) {
-                  return GrandParent.get<SubstNonTypeTemplateParmExpr>() !=
-                         nullptr;
-                }))
-          return true;
-
-        // Ignore this instance, because this match reports the
-        // location where the template is defined, not where it
-        // is instantiated.
-        if (Parent.get<SubstNonTypeTemplateParmExpr>())
-          return true;
-
-        // Don't warn on string user defined literals:
-        // std::string s = "Hello World"s;
-        if (const auto *UDL = Parent.get<UserDefinedLiteral>())
-          if (UDL->getLiteralOperatorKind() == UserDefinedLiteral::LOK_String)
+        // Some checks from original readability-magic-numbers.
+        // If any of them returns true, the constant is considered a "true"
+        // (compile-time) constant. This may not always be the case, but
+        // distinction between categories is used only to ban numeric runtime
+        // constants.
+        if (std::invoke([&]() {
+          // Ignore this instance, because this matches an
+          // expanded class enumeration value.
+          if (Parent.get<CStyleCastExpr>() &&
+              llvm::any_of(
+                  Result.Context->getParents(Parent),
+                  [](const DynTypedNode &GrandParent) {
+                        return GrandParent
+                                   .get<SubstNonTypeTemplateParmExpr>() !=
+                           nullptr;
+                  }))
             return true;
 
+          // Ignore this instance, because this match reports the
+          // location where the template is defined, not where it
+          // is instantiated.
+          if (Parent.get<SubstNonTypeTemplateParmExpr>())
+            return true;
+
+          // Don't warn on string user defined literals:
+          // std::string s = "Hello World"s;
+          if (const auto *UDL = Parent.get<UserDefinedLiteral>())
+                if (UDL->getLiteralOperatorKind() ==
+                    UserDefinedLiteral::LOK_String)
+              return true;
+
+          return false;
+        })) {
+          UsageInfo.Category = ConstCategory::TRUE_CONST;
+          return true;
+        }
         return false;
       });
+
+    return UsageInfo;
 }
 
 bool MagicNumbersCheck::isIgnoredValue(const IntegerLiteral *Literal) const {

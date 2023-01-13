@@ -10,6 +10,7 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_READABILITY_MAGICNUMBERSCHECK_H
 
 #include <type_traits>
+
 #include "../clang-tidy/ClangTidyCheck.h"
 #include "clang/Lex/Lexer.h"
 #include <llvm/ADT/APFloat.h>
@@ -30,9 +31,25 @@ public:
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
 
+  enum class ConstCategory {
+    NONE,
+    RUNTIME_CONST,
+    TRUE_CONST,
+  };
+
+  struct LiteralUsageInfo {
+    ConstCategory Category = ConstCategory::NONE;
+    bool IsUsedInInitializerList = false;
+  };
+
 private:
-  bool isConstant(const clang::ast_matchers::MatchFinder::MatchResult &Result,
-                  const clang::Expr &ExprResult) const;
+  // For static_assert in constexpr if. See
+  // https://en.cppreference.com/w/cpp/language/if#Constexpr_If
+  template <class> inline static constexpr bool dependent_false_v = false;
+
+  LiteralUsageInfo
+  getUsageInfo(const clang::ast_matchers::MatchFinder::MatchResult &Result,
+                                const clang::Expr &ExprResult) const;
 
   bool isIgnoredValue(const IntegerLiteral *Literal) const;
   bool isIgnoredValue(const FloatingLiteral *Literal) const;
@@ -40,7 +57,8 @@ private:
   bool isSyntheticValue(const clang::SourceManager *SourceManager,
                         const IntegerLiteral *Literal) const;
 
-  bool isBitFieldWidth(const clang::ast_matchers::MatchFinder::MatchResult &Result,
+  bool
+  isBitFieldWidth(const clang::ast_matchers::MatchFinder::MatchResult &Result,
                        const IntegerLiteral &Literal) const;
 
   bool isStrtolBase(const clang::ast_matchers::MatchFinder::MatchResult &Result,
@@ -60,7 +78,10 @@ private:
     if (isIgnoredValue(MatchedLiteral))
       return;
 
-    if (isConstant(Result, *MatchedLiteral))
+    LiteralUsageInfo UsageInfo = getUsageInfo(Result, *MatchedLiteral);
+    if (UsageInfo.Category == ConstCategory::TRUE_CONST ||
+        (UsageInfo.Category == ConstCategory::RUNTIME_CONST &&
+         UsageInfo.IsUsedInInitializerList))
       return;
 
     if constexpr (std::is_same_v<L, IntegerLiteral>) {
@@ -78,9 +99,23 @@ private:
         CharSourceRange::getTokenRange(MatchedLiteral->getSourceRange()),
         *Result.SourceManager, getLangOpts());
 
-    diag(MatchedLiteral->getLocation(),
-         "%0 is a magic number; consider replacing it with a named constant")
-        << LiteralSourceText;
+    if (UsageInfo.Category == ConstCategory::RUNTIME_CONST) {
+      if constexpr (std::is_same_v<L, IntegerLiteral>) {
+        diag(MatchedLiteral->getLocation(),
+             "'const' in C is not a compile-time constant; consider using an "
+             "enum for integer constants");
+      } else if constexpr (std::is_same_v<L, FloatingLiteral>) {
+        diag(MatchedLiteral->getLocation(),
+             "'const' in C is not a compile-time constant; consider using a "
+             "#define for floating-point constants");
+      } else {
+        static_assert(dependent_false_v<L>, "Not implemented");
+      }
+    } else {
+      diag(MatchedLiteral->getLocation(),
+           "%0 is a magic number; consider replacing it with a named constant")
+          << LiteralSourceText;
+    }
   }
 
   const bool IgnoreAllFloatingPointValues;

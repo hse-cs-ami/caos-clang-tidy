@@ -34,26 +34,31 @@ static bool isUsedToInitializeAConstant(
                                         tidy::caos::MagicNumbersCheck::LiteralUsageInfo& UsageInfo) {
   using tidy::caos::MagicNumbersCheck;
 
-  const auto *AsDecl = Node.get<DeclaratorDecl>();
-  if (AsDecl) {
-    if (AsDecl->getType().isConstQualified()) {
-      UsageInfo.Category =
-          LangIsCpp ? MagicNumbersCheck::ConstCategory::TRUE_CONST
-                    : MagicNumbersCheck::ConstCategory::RUNTIME_CONST;  // TODO check initializer lists
-      return true;
+  const auto *AsInitList = Node.get<InitListExpr>();
+  if (AsInitList) {
+    UsageInfo.IsUsedInInitializerList = true;
+  } else {
+    const auto *AsDecl = Node.get<DeclaratorDecl>();
+    if (AsDecl) {
+      if (AsDecl->getType().isConstQualified()) {
+        UsageInfo.Category =
+            LangIsCpp ? MagicNumbersCheck::ConstCategory::TRUE_CONST
+                      : MagicNumbersCheck::ConstCategory::RUNTIME_CONST;
+        return true;
+      }
+
+      if (AsDecl->isImplicit()) {
+        UsageInfo.Category = MagicNumbersCheck::ConstCategory::TRUE_CONST;
+        return true;
+      } else {
+        return false;
+      }
     }
 
-    if (AsDecl->isImplicit()) {
+    if (Node.get<EnumConstantDecl>()) {
       UsageInfo.Category = MagicNumbersCheck::ConstCategory::TRUE_CONST;
       return true;
-    } else {
-      return false;
     }
-  }
-
-  if (Node.get<EnumConstantDecl>()) {
-    UsageInfo.Category = MagicNumbersCheck::ConstCategory::TRUE_CONST;
-    return true;
   }
 
   return llvm::any_of(

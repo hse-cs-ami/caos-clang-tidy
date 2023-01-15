@@ -2,7 +2,7 @@
 
 set -eu
 
-LLVM_VERSION=${LLVM_VERSION:-15.0.6}
+LLVM_VERSION=${LLVM_VERSION:-15.0.7}
 
 wget "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/clang-tools-extra-${LLVM_VERSION}.src.tar.xz" -O clang-tools-extra.tar.xz
 tar xf clang-tools-extra.tar.xz

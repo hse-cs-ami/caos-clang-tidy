@@ -1,5 +1,6 @@
 Checks: '-*,caos-magic-numbers,caos-identifier-naming'
 CheckOptions:
-  caos-magic-numbers.IgnoreStrtolBases: true
+  caos-magic-numbers.IgnoreStrtolBases: true  # check that this option is still supported
+  caos-magic-numbers.IgnoredFunctionArgs: "open;3;o"
   caos-identifier-naming.UnionCase: CamelCase
   caos-identifier-naming.StructCase: CamelCase

@@ -47,6 +47,8 @@ private:
   // https://en.cppreference.com/w/cpp/language/if#Constexpr_If
   template <class> inline static constexpr bool dependent_false_v = false;
 
+  void parseIgnoredFunctionArgs();
+
   LiteralUsageInfo
   getUsageInfo(const clang::ast_matchers::MatchFinder::MatchResult &Result,
                                 const clang::Expr &ExprResult) const;
@@ -61,8 +63,11 @@ private:
   isBitFieldWidth(const clang::ast_matchers::MatchFinder::MatchResult &Result,
                        const IntegerLiteral &Literal) const;
 
-  bool isStrtolBase(const clang::ast_matchers::MatchFinder::MatchResult &Result,
+  bool isIgnoredFunctionArg(const clang::ast_matchers::MatchFinder::MatchResult &Result,
                  const IntegerLiteral &Literal) const;
+
+  bool isIgnoredFunctionArgImpl(const ast_matchers::MatchFinder::MatchFinder::MatchResult &Result,
+                                const DynTypedNode &Node) const;
 
   template <typename L>
   void checkBoundMatch(const ast_matchers::MatchFinder::MatchResult &Result,
@@ -91,7 +96,7 @@ private:
       if (isBitFieldWidth(Result, *MatchedLiteral))
         return;
 
-      if (isStrtolBase(Result, *MatchedLiteral))
+      if (isIgnoredFunctionArg(Result, *MatchedLiteral))
         return;
     }
 
@@ -118,12 +123,33 @@ private:
     }
   }
 
+  struct IgnoredFunctionArg {
+    enum Base {
+      DEC = 1,
+      OCT = 2,
+      HEX = 4,
+      BIN = 8,
+      ANY = DEC | OCT | HEX | BIN,
+    };
+
+    StringRef FunctionName;
+    // Single integer instead of an array, because in most cases literals are allowed only in 1 arg of a function.
+    // Also, different arguments can have different allowed bases.
+    unsigned Position;
+    Base Bases;
+
+    bool operator<(const IgnoredFunctionArg& other) const {
+      return FunctionName < other.FunctionName || (FunctionName == other.FunctionName && Position < other.Position);
+    }
+  };
+
   const bool IgnoreAllFloatingPointValues;
   const bool IgnoreBitFieldsWidths;
   const bool IgnorePowersOf2IntegerValues;
-  const bool IgnoreStrtolBases;
+  const bool IgnoreStrtolBases;  // Legacy option. Use IgnoredFunctionArgs instead
   const StringRef RawIgnoredIntegerValues;
   const StringRef RawIgnoredFloatingPointValues;
+  const StringRef RawIgnoredFunctionArgs;
 
   constexpr static unsigned SensibleNumberOfMagicValueExceptions = 16;
 
@@ -136,6 +162,8 @@ private:
       IgnoredFloatingPointValues;
   llvm::SmallVector<double, SensibleNumberOfMagicValueExceptions>
       IgnoredDoublePointValues;
+  llvm::SmallVector<IgnoredFunctionArg, SensibleNumberOfMagicValueExceptions>
+    IgnoredFunctionArgs;
 };
 
 } // namespace caos

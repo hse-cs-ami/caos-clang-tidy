@@ -14,8 +14,8 @@
 // This is a modified version of MagicNumbersCheck.cpp from
 // clang-tools-extra/clang-tidy release 15.0.6 If this check is used for C, it
 // If this check is used for C, it doesn't consider const-qualified numeric
-// variables as constants. Also integer literals may be permitter in third
-// parameter (base) of strtol(l)
+// variables as constants. Also integer literals may be permitted in some functions'
+// parameters (e.g. `base` of `strtol`/`strtoll` or `mode` of `open`)
 
 #include "MagicNumbersCheck.h"
 #include "../clang-tidy/utils/OptionsUtils.h"
@@ -81,34 +81,16 @@ static bool isUsedToDefineABitField(const MatchFinder::MatchResult &Result,
                       });
 }
 
-static bool isUsedAsStrtolBase(const MatchFinder::MatchResult &Result,
-                               const DynTypedNode &Node) {
-  const auto *AsCallExpr = Node.get<CallExpr>();
-  if (!AsCallExpr) {
-    // In some cases a node can have multiple parents, so it's better to check
-    // all of them
-    // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
-    return llvm::any_of(Result.Context->getParents(Node),
-                        [&Result](const DynTypedNode &Parent) {
-                          return isUsedAsStrtolBase(Result, Parent);
-                        });
-  }
-  const auto *FuncRef =
-      dyn_cast<DeclRefExpr>(AsCallExpr->getCallee()->IgnoreImpCasts());
-  if (!FuncRef) { // not sure if this can happen, better check to be safe
-    return false;
-  }
-  StringRef FuncName = FuncRef->getDecl()->getName();
-  // literals are allowed in any argument of strtol(l) to simplify
-  // implementation.
-  return FuncName == "strtol" || FuncName == "strtoll";
-}
-
 namespace tidy {
 namespace caos {
 
 const char DefaultIgnoredIntegerValues[] = "1;2;3;4;";
 const char DefaultIgnoredFloatingPointValues[] = "1.0;100.0;";
+
+// sequence of "function_name;arg_pos;bases"
+// `arg_pos` starts from 1. `bases` is a concatenation of one or more chars from set {'d', 'o', 'x', 'b', 'a'} ('a' means "any")
+// If you want to ignore multiple args of a function, use a separate item for each arg (with same function_name, but different arg_pos).
+const char DefaultIgnoredFunctionArgs[] = "strtol;3;d;strtoll;3;d";
 
 MagicNumbersCheck::MagicNumbersCheck(StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
@@ -117,11 +99,12 @@ MagicNumbersCheck::MagicNumbersCheck(StringRef Name, ClangTidyContext *Context)
       IgnoreBitFieldsWidths(Options.get("IgnoreBitFieldsWidths", true)),
       IgnorePowersOf2IntegerValues(
           Options.get("IgnorePowersOf2IntegerValues", false)),
-      IgnoreStrtolBases(Options.get("IgnoreStrtolBases", true)),
+      IgnoreStrtolBases(Options.get("IgnoreStrtolBases", false)),
       RawIgnoredIntegerValues(
           Options.get("IgnoredIntegerValues", DefaultIgnoredIntegerValues)),
       RawIgnoredFloatingPointValues(Options.get(
-          "IgnoredFloatingPointValues", DefaultIgnoredFloatingPointValues)) {
+          "IgnoredFloatingPointValues", DefaultIgnoredFloatingPointValues)),
+      RawIgnoredFunctionArgs(Options.get("IgnoredFunctionArgs", DefaultIgnoredFunctionArgs)) {
   // Process the set of ignored integer values.
   const std::vector<StringRef> IgnoredIntegerValuesInput =
       utils::options::parseStringList(RawIgnoredIntegerValues);
@@ -158,6 +141,67 @@ MagicNumbersCheck::MagicNumbersCheck(StringRef Name, ClangTidyContext *Context)
     llvm::sort(IgnoredFloatingPointValues);
     llvm::sort(IgnoredDoublePointValues);
   }
+
+  parseIgnoredFunctionArgs();
+}
+
+
+void MagicNumbersCheck::parseIgnoredFunctionArgs() {
+  // Example:
+  // IgnoredFunctionArgs: "strtol;3;d;strtoll;3;d;open;3;o;creat;2;o;chmod;2;o;fchmod;2;o"
+  const std::vector<StringRef> IgnoredFunctionArgsInput =
+        utils::options::parseStringList(RawIgnoredFunctionArgs);
+  if (IgnoredFunctionArgsInput.size() % 3 != 0) {
+    configurationDiag("invalid IgnoredFunctionArgs option list '%0' (length is not a multiple of 3)") << RawIgnoredFunctionArgs;
+    return;  // Don't even try to parse the list. If a value is missing from the middle of the list, all following entries will be broken.
+  }
+  for (size_t i = 0; i < IgnoredFunctionArgsInput.size(); i += 3) {
+    StringRef FunctionName = IgnoredFunctionArgsInput[i];  // Check if name is a valid identifier?
+    StringRef PositionInput = IgnoredFunctionArgsInput[i + 1];
+    unsigned Position;
+    if (PositionInput.getAsInteger(10, Position)) {
+      configurationDiag("invalid arg_pos '%0' in item #%1 of IgnoredFunctionArgs option") << PositionInput << i / 3;
+      continue;
+    }
+    StringRef BasesInput = IgnoredFunctionArgsInput[i + 2];
+    int Bases = 0;
+    bool BasesErr = false;
+    for (char Base : BasesInput) {
+      switch (Base) {
+      case 'd':
+        Bases |= IgnoredFunctionArg::Base::DEC;
+        break;
+      case 'o':
+        Bases |= IgnoredFunctionArg::Base::OCT;
+        break;
+      case 'x':
+        Bases |= IgnoredFunctionArg::Base::HEX;
+        break;
+      case 'b':
+        Bases |= IgnoredFunctionArg::Base::BIN;
+        break;
+      case 'a':
+        Bases = IgnoredFunctionArg::Base::ANY;
+        break;
+      default:
+        // std::string is used, because char is formatted as an integer.
+        configurationDiag("invalid char '%0' in allowed bases '%1' of item #%2 of IgnoredFunctionArgs option") << std::string(1, Base) << BasesInput << i / 3;
+        BasesErr = true;  // Don't break out of inner loop, report all invalid chars (clang-tidy deduplicates diags, so we'll report only distinct chars)
+      }
+    }
+    if (BasesErr) {
+      continue;
+    }
+    assert(static_cast<int>(Bases) != 0);
+    IgnoredFunctionArgs.push_back({.FunctionName = FunctionName, .Position = Position, .Bases = static_cast<IgnoredFunctionArg::Base>(Bases)});
+  }
+
+  if (IgnoreStrtolBases) {
+    // Duplicates are not checked (at this scale they shouldn't have any noticeable effect on performance).
+    IgnoredFunctionArgs.push_back({.FunctionName = "strtol", .Position = 3, .Bases = IgnoredFunctionArg::Base::DEC});
+    IgnoredFunctionArgs.push_back({.FunctionName = "strtoll", .Position = 3, .Bases = IgnoredFunctionArg::Base::DEC});
+  }
+  llvm::sort(IgnoredFunctionArgs);
 }
 
 void MagicNumbersCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
@@ -170,6 +214,7 @@ void MagicNumbersCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "IgnoredIntegerValues", RawIgnoredIntegerValues);
   Options.store(Opts, "IgnoredFloatingPointValues",
                 RawIgnoredFloatingPointValues);
+  Options.store(Opts, "IgnoredFunctionArgs", RawIgnoredFunctionArgs);
 }
 
 void MagicNumbersCheck::registerMatchers(MatchFinder *Finder) {
@@ -296,17 +341,49 @@ bool MagicNumbersCheck::isBitFieldWidth(
                       });
 }
 
-bool MagicNumbersCheck::isStrtolBase(
+bool MagicNumbersCheck::isIgnoredFunctionArg(
     const clang::ast_matchers::MatchFinder::MatchResult &Result,
     const IntegerLiteral &Literal) const {
-  if (!IgnoreStrtolBases) {
+  if (IgnoredFunctionArgs.empty()) {
     return false;
   }
   return llvm::any_of(Result.Context->getParents(Literal),
-                      [&Result](const DynTypedNode &Parent) {
-                        return isUsedAsStrtolBase(Result, Parent);
+                      [this, &Result](const DynTypedNode &Parent) {
+                        return isIgnoredFunctionArgImpl(Result, Parent);
                       });
 }
+
+bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult &Result,
+                                                 const DynTypedNode &Node) const {
+  const auto *AsCallExpr = Node.get<CallExpr>();
+  if (!AsCallExpr) {
+    // In some cases a node can have multiple parents, so it's better to check
+    // all of them
+    // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
+    return llvm::any_of(Result.Context->getParents(Node),
+                        [this, &Result](const DynTypedNode &Parent) {
+                          return isIgnoredFunctionArgImpl(Result, Parent);
+                        });
+  }
+  const auto *FuncRef =
+      dyn_cast<DeclRefExpr>(AsCallExpr->getCallee()->IgnoreImpCasts());
+  if (!FuncRef) { // not sure if this can happen, better check to be safe
+    return false;
+  }
+  StringRef FuncName = FuncRef->getDecl()->getName();
+  IgnoredFunctionArg ArgInfo {
+    .FunctionName = FuncName,
+    .Position = 0,  // TODO actual pos
+  };
+  auto it = std::lower_bound(IgnoredFunctionArgs.begin(), IgnoredFunctionArgs.end(), ArgInfo);
+  if (it == IgnoredFunctionArgs.end() || it->FunctionName != FuncName/* || it->Position != ArgInfo.Position*/) {
+    // (FunctionName, Position) is not in the list.
+    return false;
+  }
+  // TODO check base
+  return true;
+}
+
 
 } // namespace caos
 } // namespace tidy

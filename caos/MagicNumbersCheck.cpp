@@ -249,56 +249,57 @@ void MagicNumbersCheck::check(const MatchFinder::MatchResult &Result) {
   checkBoundMatch<FloatingLiteral>(Result, "float");
 }
 
+static bool isAnotherKindOfConstant(
+    const clang::ast_matchers::MatchFinder::MatchResult &Result,
+    const DynTypedNode &Node) {
+  // Some checks from original readability-magic-numbers.
+  // If any of them returns true, the constant is considered a "true"
+  // (compile-time) constant. This may not always be the case, but distinction
+  // between categories is used only to ban numeric constants marked with
+  // "const" in C.
+
+  // Ignore this instance, because this matches an
+  // expanded class enumeration value.
+  if (Node.get<CStyleCastExpr>() &&
+      llvm::any_of(Result.Context->getParents(Node),
+                   [](const DynTypedNode &GrandParent) {
+                     return GrandParent.get<SubstNonTypeTemplateParmExpr>() !=
+                            nullptr;
+                   }))
+    return true;
+
+  // Ignore this instance, because this match reports the
+  // location where the template is defined, not where it
+  // is instantiated.
+  if (Node.get<SubstNonTypeTemplateParmExpr>())
+    return true;
+
+  // Don't warn on string user defined literals:
+  // std::string s = "Hello World"s;
+  if (const auto *UDL = Node.get<UserDefinedLiteral>())
+    if (UDL->getLiteralOperatorKind() == UserDefinedLiteral::LOK_String)
+      return true;
+
+  return false;
+}
+
 MagicNumbersCheck::LiteralUsageInfo MagicNumbersCheck::getUsageInfo(
     const clang::ast_matchers::MatchFinder::MatchResult &Result,
     const clang::Expr &ExprResult) const {
   LiteralUsageInfo UsageInfo;
 
-  llvm::any_of(
-      Result.Context->getParents(ExprResult),
-      [this, &Result, &UsageInfo](const DynTypedNode &Parent) {
-        if (isUsedToInitializeAConstant(Result, Parent, getLangOpts().CPlusPlus,
-                                        UsageInfo))
-          return true;
+  llvm::any_of(Result.Context->getParents(ExprResult),
+               [this, &Result, &UsageInfo](const DynTypedNode &Parent) {
+                 if (isUsedToInitializeAConstant(
+                         Result, Parent, getLangOpts().CPlusPlus, UsageInfo))
+                   return true;
 
-        // Some checks from original readability-magic-numbers.
-        // If any of them returns true, the constant is considered a "true"
-        // (compile-time) constant. This may not always be the case, but
-        // distinction between categories is used only to ban numeric runtime
-        // constants.
-        if (std::invoke([&]() {
-          // Ignore this instance, because this matches an
-          // expanded class enumeration value.
-          if (Parent.get<CStyleCastExpr>() &&
-              llvm::any_of(
-                  Result.Context->getParents(Parent),
-                  [](const DynTypedNode &GrandParent) {
-                        return GrandParent
-                                   .get<SubstNonTypeTemplateParmExpr>() !=
-                           nullptr;
-                  }))
-            return true;
-
-          // Ignore this instance, because this match reports the
-          // location where the template is defined, not where it
-          // is instantiated.
-          if (Parent.get<SubstNonTypeTemplateParmExpr>())
-            return true;
-
-          // Don't warn on string user defined literals:
-          // std::string s = "Hello World"s;
-          if (const auto *UDL = Parent.get<UserDefinedLiteral>())
-                if (UDL->getLiteralOperatorKind() ==
-                    UserDefinedLiteral::LOK_String)
-              return true;
-
-          return false;
-        })) {
-          UsageInfo.Category = ConstCategory::TRUE_CONST;
-          return true;
-        }
-        return false;
-      });
+                 if (isAnotherKindOfConstant(Result, Parent)) {
+                   UsageInfo.Category = ConstCategory::TRUE_CONST;
+                   return true;
+                 }
+                 return false;
+               });
 
   return UsageInfo;
 }

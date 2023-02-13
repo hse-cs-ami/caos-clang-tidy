@@ -136,9 +136,9 @@ private:
     };
 
     StringRef FunctionName;
-    // Single integer is used instead of an array, because in most cases literals
-    // are allowed only in 1 arg of a function. Also, different arguments can have
-    // different allowed bases.
+    // Single integer is used instead of an array, because in most cases
+    // literals are allowed only in 1 arg of a function.
+    // Also, different arguments can have different allowed bases.
     unsigned Position;
     Base Bases;
 

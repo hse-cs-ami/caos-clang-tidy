@@ -22,6 +22,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/ArrayRef.h"
 #include <algorithm>
 
 using namespace clang::ast_matchers;
@@ -348,21 +349,21 @@ bool MagicNumbersCheck::isIgnoredFunctionArg(
     return false;
   }
   return llvm::any_of(Result.Context->getParents(Literal),
-                      [this, &Result](const DynTypedNode &Parent) {
-                        return isIgnoredFunctionArgImpl(Result, Parent);
+                      [&, this](const DynTypedNode &Parent) {
+                        return isIgnoredFunctionArgImpl(Result, Parent, DynTypedNode::create(Literal));
                       });
 }
 
 bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult &Result,
-                                                 const DynTypedNode &Node) const {
+                                                 const DynTypedNode &Node, const DynTypedNode &Child) const {
   const auto *AsCallExpr = Node.get<CallExpr>();
   if (!AsCallExpr) {
     // In some cases a node can have multiple parents, so it's better to check
     // all of them
     // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
     return llvm::any_of(Result.Context->getParents(Node),
-                        [this, &Result](const DynTypedNode &Parent) {
-                          return isIgnoredFunctionArgImpl(Result, Parent);
+                        [&, this](const DynTypedNode &Parent) {
+                          return isIgnoredFunctionArgImpl(Result, Parent, Node);
                         });
   }
   const auto *FuncRef =
@@ -370,13 +371,21 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
   if (!FuncRef) { // not sure if this can happen, better check to be safe
     return false;
   }
-  StringRef FuncName = FuncRef->getDecl()->getName();
+
   IgnoredFunctionArg ArgInfo {
-    .FunctionName = FuncName,
-    .Position = 0,  // TODO actual pos
+    .FunctionName = FuncRef->getDecl()->getName(),
+    .Position = 0,
   };
+  ArrayRef<const Expr*> Args{AsCallExpr->getArgs(), AsCallExpr->getNumArgs()};
+  for (size_t i = 0; i < Args.size(); ++i) {
+    if (DynTypedNode::create(*Args[i]) == Child) {
+      ArgInfo.Position = i + 1;
+    }
+  }
+  assert(ArgInfo.Position > 0);
+
   auto it = std::lower_bound(IgnoredFunctionArgs.begin(), IgnoredFunctionArgs.end(), ArgInfo);
-  if (it == IgnoredFunctionArgs.end() || it->FunctionName != FuncName/* || it->Position != ArgInfo.Position*/) {
+  if (it == IgnoredFunctionArgs.end() || it->FunctionName != ArgInfo.FunctionName || it->Position != ArgInfo.Position) {
     // (FunctionName, Position) is not in the list.
     return false;
   }

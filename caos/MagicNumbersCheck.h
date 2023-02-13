@@ -51,7 +51,7 @@ private:
 
   LiteralUsageInfo
   getUsageInfo(const clang::ast_matchers::MatchFinder::MatchResult &Result,
-                                const clang::Expr &ExprResult) const;
+               const clang::Expr &ExprResult) const;
 
   bool isIgnoredValue(const IntegerLiteral *Literal) const;
   bool isIgnoredValue(const FloatingLiteral *Literal) const;
@@ -61,13 +61,16 @@ private:
 
   bool
   isBitFieldWidth(const clang::ast_matchers::MatchFinder::MatchResult &Result,
-                       const IntegerLiteral &Literal) const;
+                  const IntegerLiteral &Literal) const;
 
-  bool isIgnoredFunctionArg(const clang::ast_matchers::MatchFinder::MatchResult &Result,
-                 const IntegerLiteral &Literal) const;
+  bool isIgnoredFunctionArg(
+      const clang::ast_matchers::MatchFinder::MatchResult &Result,
+      const IntegerLiteral &Literal) const;
 
-  bool isIgnoredFunctionArgImpl(const ast_matchers::MatchFinder::MatchFinder::MatchResult &Result,
-                                const DynTypedNode &Node, const DynTypedNode &Child, const IntegerLiteral &Literal) const;
+  bool isIgnoredFunctionArgImpl(
+      const ast_matchers::MatchFinder::MatchFinder::MatchResult &Result,
+      const DynTypedNode &Node, const DynTypedNode &Child,
+      const IntegerLiteral &Literal) const;
 
   template <typename L>
   void checkBoundMatch(const ast_matchers::MatchFinder::MatchResult &Result,
@@ -133,20 +136,23 @@ private:
     };
 
     StringRef FunctionName;
-    // Single integer instead of an array, because in most cases literals are allowed only in 1 arg of a function.
-    // Also, different arguments can have different allowed bases.
+    // Single integer is used instead of an array, because in most cases literals
+    // are allowed only in 1 arg of a function. Also, different arguments can have
+    // different allowed bases.
     unsigned Position;
     Base Bases;
 
-    bool operator<(const IgnoredFunctionArg& other) const {
-      return FunctionName < other.FunctionName || (FunctionName == other.FunctionName && Position < other.Position);
+    bool operator<(const IgnoredFunctionArg &other) const {
+      return FunctionName < other.FunctionName ||
+             (FunctionName == other.FunctionName && Position < other.Position);
     }
   };
 
   const bool IgnoreAllFloatingPointValues;
   const bool IgnoreBitFieldsWidths;
   const bool IgnorePowersOf2IntegerValues;
-  const bool IgnoreStrtolBases;  // Legacy option. Use IgnoredFunctionArgs instead
+  // Legacy option. Use IgnoredFunctionArgs instead
+  const bool IgnoreStrtolBases;
   const StringRef RawIgnoredIntegerValues;
   const StringRef RawIgnoredFloatingPointValues;
   const StringRef RawIgnoredFunctionArgs;
@@ -163,7 +169,7 @@ private:
   llvm::SmallVector<double, SensibleNumberOfMagicValueExceptions>
       IgnoredDoublePointValues;
   llvm::SmallVector<IgnoredFunctionArg, SensibleNumberOfMagicValueExceptions>
-    IgnoredFunctionArgs;
+      IgnoredFunctionArgs;
 };
 
 } // namespace caos

@@ -14,15 +14,15 @@
 // This is a modified version of MagicNumbersCheck.cpp from
 // clang-tools-extra/clang-tidy release 15.0.6 If this check is used for C, it
 // If this check is used for C, it doesn't consider const-qualified numeric
-// variables as constants. Also integer literals may be permitted in some functions'
-// parameters (e.g. `base` of `strtol`/`strtoll` or `mode` of `open`)
+// variables as constants. Also integer literals may be permitted in some
+// functions' parameters (e.g. `base` of `strtol`/`strtoll` or `mode` of `open`)
 
 #include "MagicNumbersCheck.h"
 #include "../clang-tidy/utils/OptionsUtils.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 
 using namespace clang::ast_matchers;
@@ -31,8 +31,8 @@ namespace clang {
 
 static bool isUsedToInitializeAConstant(
     const MatchFinder::MatchResult &Result, const DynTypedNode &Node,
-                                        bool LangIsCpp,
-                                        tidy::caos::MagicNumbersCheck::LiteralUsageInfo& UsageInfo) {
+    bool LangIsCpp,
+    tidy::caos::MagicNumbersCheck::LiteralUsageInfo &UsageInfo) {
   using tidy::caos::MagicNumbersCheck;
 
   const auto *AsInitList = Node.get<InitListExpr>();
@@ -64,10 +64,10 @@ static bool isUsedToInitializeAConstant(
 
   return llvm::any_of(
       Result.Context->getParents(Node),
-                      [&Result, &UsageInfo, LangIsCpp](const DynTypedNode &Parent) {
+      [&Result, &UsageInfo, LangIsCpp](const DynTypedNode &Parent) {
         return isUsedToInitializeAConstant(Result, Parent, LangIsCpp,
                                            UsageInfo);
-                      });
+      });
 }
 
 static bool isUsedToDefineABitField(const MatchFinder::MatchResult &Result,
@@ -105,7 +105,8 @@ MagicNumbersCheck::MagicNumbersCheck(StringRef Name, ClangTidyContext *Context)
           Options.get("IgnoredIntegerValues", DefaultIgnoredIntegerValues)),
       RawIgnoredFloatingPointValues(Options.get(
           "IgnoredFloatingPointValues", DefaultIgnoredFloatingPointValues)),
-      RawIgnoredFunctionArgs(Options.get("IgnoredFunctionArgs", DefaultIgnoredFunctionArgs)) {
+      RawIgnoredFunctionArgs(
+          Options.get("IgnoredFunctionArgs", DefaultIgnoredFunctionArgs)) {
   // Process the set of ignored integer values.
   const std::vector<StringRef> IgnoredIntegerValuesInput =
       utils::options::parseStringList(RawIgnoredIntegerValues);
@@ -146,22 +147,28 @@ MagicNumbersCheck::MagicNumbersCheck(StringRef Name, ClangTidyContext *Context)
   parseIgnoredFunctionArgs();
 }
 
-
 void MagicNumbersCheck::parseIgnoredFunctionArgs() {
   // Example:
-  // IgnoredFunctionArgs: "strtol;3;d;strtoll;3;d;open;3;o;creat;2;o;chmod;2;o;fchmod;2;o"
+  // IgnoredFunctionArgs:
+  // "strtol;3;d;strtoll;3;d;open;3;o;creat;2;o;chmod;2;o;fchmod;2;o"
   const std::vector<StringRef> IgnoredFunctionArgsInput =
-        utils::options::parseStringList(RawIgnoredFunctionArgs);
+      utils::options::parseStringList(RawIgnoredFunctionArgs);
   if (IgnoredFunctionArgsInput.size() % 3 != 0) {
-    configurationDiag("invalid IgnoredFunctionArgs option list '%0' (length is not a multiple of 3)") << RawIgnoredFunctionArgs;
-    return;  // Don't even try to parse the list. If a value is missing from the middle of the list, all following entries will be broken.
+    configurationDiag("invalid IgnoredFunctionArgs option list '%0' (length is "
+                      "not a multiple of 3)")
+        << RawIgnoredFunctionArgs;
+    return; // Don't even try to parse the list. If a value is missing from the
+            // middle of the list, all following entries will be broken.
   }
   for (size_t i = 0; i < IgnoredFunctionArgsInput.size(); i += 3) {
-    StringRef FunctionName = IgnoredFunctionArgsInput[i];  // Check if name is a valid identifier?
+    StringRef FunctionName =
+        IgnoredFunctionArgsInput[i]; // Check if name is a valid identifier?
     StringRef PositionInput = IgnoredFunctionArgsInput[i + 1];
     unsigned Position;
     if (PositionInput.getAsInteger(10, Position)) {
-      configurationDiag("invalid arg_pos '%0' in item #%1 of IgnoredFunctionArgs option") << PositionInput << i / 3;
+      configurationDiag(
+          "invalid arg_pos '%0' in item #%1 of IgnoredFunctionArgs option")
+          << PositionInput << i / 3;
       continue;
     }
     StringRef BasesInput = IgnoredFunctionArgsInput[i + 2];
@@ -186,21 +193,31 @@ void MagicNumbersCheck::parseIgnoredFunctionArgs() {
         break;
       default:
         // std::string is used, because char is formatted as an integer.
-        configurationDiag("invalid char '%0' in allowed bases '%1' of item #%2 of IgnoredFunctionArgs option") << std::string(1, Base) << BasesInput << i / 3;
-        BasesErr = true;  // Don't break out of inner loop, report all invalid chars (clang-tidy deduplicates diags, so we'll report only distinct chars)
+        configurationDiag("invalid char '%0' in allowed bases '%1' of item #%2 "
+                          "of IgnoredFunctionArgs option")
+            << std::string(1, Base) << BasesInput << i / 3;
+        BasesErr = true; // Don't break out of inner loop, report all invalid chars
+                         // (clang-tidy deduplicates diags, so we'll report only distinct chars)
       }
     }
     if (BasesErr) {
       continue;
     }
     assert(static_cast<int>(Bases) != 0);
-    IgnoredFunctionArgs.push_back({.FunctionName = FunctionName, .Position = Position, .Bases = static_cast<IgnoredFunctionArg::Base>(Bases)});
+    IgnoredFunctionArgs.push_back(
+        {.FunctionName = FunctionName,
+         .Position = Position,
+         .Bases = static_cast<IgnoredFunctionArg::Base>(Bases)});
   }
 
   if (IgnoreStrtolBases) {
     // Duplicates are not checked (at this scale they shouldn't have any noticeable effect on performance).
-    IgnoredFunctionArgs.push_back({.FunctionName = "strtol", .Position = 3, .Bases = IgnoredFunctionArg::Base::DEC});
-    IgnoredFunctionArgs.push_back({.FunctionName = "strtoll", .Position = 3, .Bases = IgnoredFunctionArg::Base::DEC});
+    IgnoredFunctionArgs.push_back({.FunctionName = "strtol",
+                                   .Position = 3,
+                                   .Bases = IgnoredFunctionArg::Base::DEC});
+    IgnoredFunctionArgs.push_back({.FunctionName = "strtoll",
+                                   .Position = 3,
+                                   .Bases = IgnoredFunctionArg::Base::DEC});
   }
   llvm::sort(IgnoredFunctionArgs);
 }
@@ -234,7 +251,7 @@ void MagicNumbersCheck::check(const MatchFinder::MatchResult &Result) {
 
 MagicNumbersCheck::LiteralUsageInfo MagicNumbersCheck::getUsageInfo(
     const clang::ast_matchers::MatchFinder::MatchResult &Result,
-                                const clang::Expr &ExprResult) const {
+    const clang::Expr &ExprResult) const {
   LiteralUsageInfo UsageInfo;
 
   llvm::any_of(
@@ -283,7 +300,7 @@ MagicNumbersCheck::LiteralUsageInfo MagicNumbersCheck::getUsageInfo(
         return false;
       });
 
-    return UsageInfo;
+  return UsageInfo;
 }
 
 bool MagicNumbersCheck::isIgnoredValue(const IntegerLiteral *Literal) const {
@@ -350,12 +367,15 @@ bool MagicNumbersCheck::isIgnoredFunctionArg(
   }
   return llvm::any_of(Result.Context->getParents(Literal),
                       [&, this](const DynTypedNode &Parent) {
-                        return isIgnoredFunctionArgImpl(Result, Parent, DynTypedNode::create(Literal), Literal);
+                        return isIgnoredFunctionArgImpl(
+                            Result, Parent, DynTypedNode::create(Literal),
+                            Literal);
                       });
 }
 
-bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult &Result,
-                                                 const DynTypedNode &Node, const DynTypedNode &Child, const IntegerLiteral &Literal) const {
+bool MagicNumbersCheck::isIgnoredFunctionArgImpl(
+    const MatchFinder::MatchResult &Result, const DynTypedNode &Node,
+    const DynTypedNode &Child, const IntegerLiteral &Literal) const {
   const auto *AsCallExpr = Node.get<CallExpr>();
   if (!AsCallExpr) {
     // In some cases a node can have multiple parents, so it's better to check
@@ -363,7 +383,8 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
     // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
     return llvm::any_of(Result.Context->getParents(Node),
                         [&, this](const DynTypedNode &Parent) {
-                          return isIgnoredFunctionArgImpl(Result, Parent, Node, Literal);
+                          return isIgnoredFunctionArgImpl(Result, Parent, Node,
+                                                          Literal);
                         });
   }
   const auto *FuncRef =
@@ -372,11 +393,11 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
     return false;
   }
 
-  IgnoredFunctionArg ArgInfo {
-    .FunctionName = FuncRef->getDecl()->getName(),
-    .Position = 0,
+  IgnoredFunctionArg ArgInfo{
+      .FunctionName = FuncRef->getDecl()->getName(),
+      .Position = 0,
   };
-  ArrayRef<const Expr*> Args{AsCallExpr->getArgs(), AsCallExpr->getNumArgs()};
+  ArrayRef<const Expr *> Args{AsCallExpr->getArgs(), AsCallExpr->getNumArgs()};
   for (size_t i = 0; i < Args.size(); ++i) {
     if (DynTypedNode::create(*Args[i]) == Child) {
       ArgInfo.Position = i + 1;
@@ -384,15 +405,19 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
   }
   assert(ArgInfo.Position > 0);
 
-  auto it = std::lower_bound(IgnoredFunctionArgs.begin(), IgnoredFunctionArgs.end(), ArgInfo);
-  if (it == IgnoredFunctionArgs.end() || it->FunctionName != ArgInfo.FunctionName || it->Position != ArgInfo.Position) {
+  auto it = std::lower_bound(IgnoredFunctionArgs.begin(),
+                             IgnoredFunctionArgs.end(), ArgInfo);
+  if (it == IgnoredFunctionArgs.end() ||
+      it->FunctionName != ArgInfo.FunctionName ||
+      it->Position != ArgInfo.Position) {
     // (FunctionName, Position) is not in the list.
     return false;
   }
 
   llvm::SmallVector<char> LiteralBuf;
   SourceLocation Loc = Literal.getLocation();
-  StringRef LiteralSpelling = Lexer::getSpelling(Loc, LiteralBuf, *Result.SourceManager, getLangOpts());
+  StringRef LiteralSpelling =
+      Lexer::getSpelling(Loc, LiteralBuf, *Result.SourceManager, getLangOpts());
   auto Base = IgnoredFunctionArg::Base::DEC;
   // Can LiteralSpelling be empty? In this case, it's considered as a decimal literal.
   // Zero is allowed for any base (it's always ignored).
@@ -409,7 +434,6 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
   }
   return Base & it->Bases;
 }
-
 
 } // namespace caos
 } // namespace tidy

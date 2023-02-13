@@ -350,12 +350,12 @@ bool MagicNumbersCheck::isIgnoredFunctionArg(
   }
   return llvm::any_of(Result.Context->getParents(Literal),
                       [&, this](const DynTypedNode &Parent) {
-                        return isIgnoredFunctionArgImpl(Result, Parent, DynTypedNode::create(Literal));
+                        return isIgnoredFunctionArgImpl(Result, Parent, DynTypedNode::create(Literal), Literal);
                       });
 }
 
 bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult &Result,
-                                                 const DynTypedNode &Node, const DynTypedNode &Child) const {
+                                                 const DynTypedNode &Node, const DynTypedNode &Child, const IntegerLiteral &Literal) const {
   const auto *AsCallExpr = Node.get<CallExpr>();
   if (!AsCallExpr) {
     // In some cases a node can have multiple parents, so it's better to check
@@ -363,7 +363,7 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
     // https://github.com/llvm-mirror/clang-tools-extra/blob/5c40544fa40bfb85ec888b6a03421b3905e4a4e7/clang-tidy/utils/ExprSequence.cpp#L21
     return llvm::any_of(Result.Context->getParents(Node),
                         [&, this](const DynTypedNode &Parent) {
-                          return isIgnoredFunctionArgImpl(Result, Parent, Node);
+                          return isIgnoredFunctionArgImpl(Result, Parent, Node, Literal);
                         });
   }
   const auto *FuncRef =
@@ -389,8 +389,25 @@ bool MagicNumbersCheck::isIgnoredFunctionArgImpl(const MatchFinder::MatchResult 
     // (FunctionName, Position) is not in the list.
     return false;
   }
-  // TODO check base
-  return true;
+
+  llvm::SmallVector<char> LiteralBuf;
+  SourceLocation Loc = Literal.getLocation();
+  StringRef LiteralSpelling = Lexer::getSpelling(Loc, LiteralBuf, *Result.SourceManager, getLangOpts());
+  auto Base = IgnoredFunctionArg::Base::DEC;
+  // Can LiteralSpelling be empty? In this case, it's considered as a decimal literal.
+  // Zero is allowed for any base (it's always ignored).
+  // All other one-digit literals are decimal.
+  if (LiteralSpelling.size() >= 2 && LiteralSpelling[0] == '0') {
+    if (LiteralSpelling[1] == 'x' || LiteralSpelling[1] == 'X') {
+      Base = IgnoredFunctionArg::Base::HEX;
+    } else if (LiteralSpelling[1] == 'b') {
+      Base = IgnoredFunctionArg::Base::BIN;
+    } else {
+      assert('0' <= LiteralSpelling[1] && LiteralSpelling[1] <= '9');
+      Base = IgnoredFunctionArg::Base::OCT;
+    }
+  }
+  return Base & it->Bases;
 }
 
 

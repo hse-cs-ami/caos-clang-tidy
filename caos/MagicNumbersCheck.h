@@ -67,7 +67,7 @@ private:
                  const IntegerLiteral &Literal) const;
 
   bool isIgnoredFunctionArgImpl(const ast_matchers::MatchFinder::MatchFinder::MatchResult &Result,
-                                const DynTypedNode &Node, const DynTypedNode &Child) const;
+                                const DynTypedNode &Node, const DynTypedNode &Child, const IntegerLiteral &Literal) const;
 
   template <typename L>
   void checkBoundMatch(const ast_matchers::MatchFinder::MatchResult &Result,

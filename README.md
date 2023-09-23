@@ -37,3 +37,5 @@ alias clang-tidy='clang-tidy-15 --load /usr/local/lib/libclangTidyCaosModule.so'
 clang-tidy --config=... --checks="caos-magic-numbers,caos-identifier-naming" test/main.c
 
 ```
+
+2023 update: `readability-identifier-naming` has been [fixed](https://github.com/llvm/llvm-project/commit/fa8e74073762300d07b02adec42c629daf82c44b) (probably will be included in 18.x release and will make `caos-identifier-naming` obsolete)

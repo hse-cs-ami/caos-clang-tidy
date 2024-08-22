@@ -9,7 +9,6 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANGTIDYPROFILING_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANGTIDYPROFILING_H
 
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Chrono.h"
 #include "llvm/Support/Timer.h"
@@ -35,9 +34,9 @@ public:
   };
 
 private:
-  llvm::Optional<llvm::TimerGroup> TG;
+  std::optional<llvm::TimerGroup> TG;
 
-  llvm::Optional<StorageParams> Storage;
+  std::optional<StorageParams> Storage;
 
   void printUserFriendlyTable(llvm::raw_ostream &OS);
   void printAsJSON(llvm::raw_ostream &OS);
@@ -49,7 +48,7 @@ public:
 
   ClangTidyProfiling() = default;
 
-  ClangTidyProfiling(llvm::Optional<StorageParams> Storage);
+  ClangTidyProfiling(std::optional<StorageParams> Storage);
 
   ~ClangTidyProfiling();
 };

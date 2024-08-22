@@ -10,7 +10,6 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_READABILITY_IDENTIFIERNAMINGCHECK_H
 
 #include "../clang-tidy/utils/RenamerClangTidyCheck.h"
-#include "llvm/ADT/Optional.h"
 namespace clang {
 namespace tidy {
 namespace caos {
@@ -57,7 +56,7 @@ public:
   struct HungarianNotationOption {
     HungarianNotationOption() : HPType(HungarianPrefixType::HPT_Off) {}
 
-    llvm::Optional<CaseType> Case;
+    std::optional<CaseType> Case;
     HungarianPrefixType HPType;
     llvm::StringMap<std::string> General;
     llvm::StringMap<std::string> CString;
@@ -69,14 +68,14 @@ public:
   struct NamingStyle {
     NamingStyle() = default;
 
-    NamingStyle(llvm::Optional<CaseType> Case, const std::string &Prefix,
+    NamingStyle(std::optional<CaseType> Case, const std::string &Prefix,
                 const std::string &Suffix, const std::string &IgnoredRegexpStr,
                 HungarianPrefixType HPType);
     NamingStyle(const NamingStyle &O) = delete;
     NamingStyle &operator=(NamingStyle &&O) = default;
     NamingStyle(NamingStyle &&O) = default;
 
-    llvm::Optional<CaseType> Case;
+    std::optional<CaseType> Case;
     std::string Prefix;
     std::string Suffix;
     // Store both compiled and non-compiled forms so original value can be
@@ -168,13 +167,13 @@ public:
 
   StyleKind findStyleKind(
       const NamedDecl *D,
-      ArrayRef<llvm::Optional<IdentifierNamingCheck::NamingStyle>> NamingStyles,
+      ArrayRef<std::optional<IdentifierNamingCheck::NamingStyle>> NamingStyles,
       bool IgnoreMainLikeFunctions) const;
 
-  llvm::Optional<RenamerClangTidyCheck::FailureInfo> getFailureInfo(
+  std::optional<RenamerClangTidyCheck::FailureInfo> getFailureInfo(
       StringRef Type, StringRef Name, const NamedDecl *ND,
       SourceLocation Location,
-      ArrayRef<llvm::Optional<IdentifierNamingCheck::NamingStyle>> NamingStyles,
+      ArrayRef<std::optional<IdentifierNamingCheck::NamingStyle>> NamingStyles,
       const IdentifierNamingCheck::HungarianNotationOption &HNOption,
       StyleKind SK, const SourceManager &SM, bool IgnoreFailedSplit) const;
 
@@ -182,10 +181,10 @@ public:
                                  bool IncludeMainLike) const;
 
 private:
-  llvm::Optional<FailureInfo>
+  std::optional<FailureInfo>
   getDeclFailureInfo(const NamedDecl *Decl,
                      const SourceManager &SM) const override;
-  llvm::Optional<FailureInfo>
+  std::optional<FailureInfo>
   getMacroFailureInfo(const Token &MacroNameTok,
                       const SourceManager &SM) const override;
   DiagInfo getDiagInfo(const NamingCheckId &ID,

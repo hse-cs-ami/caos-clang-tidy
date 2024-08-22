@@ -5,10 +5,10 @@ This repository is based on [AliceO2Group/O2CodeChecker](https://github.com/Alic
 ## Building
 
 Prerequisites:
-- `clang-16`
-- `clang-tidy-16`
+- `clang-17`
+- `clang-tidy-17`
 - `cmake`
-- `libclang-16-dev`
+- `libclang-17-dev`
 
 ```shell
 ./build.sh
@@ -23,7 +23,7 @@ sudo make install
 ## Running
 
 ```shell
- clang-tidy-16 --load $PWD/build/caos/libclangTidyCaosModule.so \
+ clang-tidy-17 --load $PWD/build/caos/libclangTidyCaosModule.so \
   --config="{WarningsAsErrors: '*', CheckOptions: {caos-identifier-naming.UnionCase: CamelCase, caos-identifier-naming.StructCase: CamelCase}}" \
   --checks="caos-magic-numbers,caos-identifier-naming" \
   test/main.c
@@ -32,7 +32,7 @@ sudo make install
 Or, if the plugin was installed via "make install":
 ```shell
 # you can add this line to .bashrc
-alias clang-tidy='clang-tidy-16 --load /usr/local/lib/libclangTidyCaosModule.so'
+alias clang-tidy='clang-tidy-17 --load /usr/local/lib/libclangTidyCaosModule.so'
 
 clang-tidy --config=... --checks="caos-magic-numbers,caos-identifier-naming" test/main.c
 

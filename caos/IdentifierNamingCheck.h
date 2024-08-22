@@ -119,12 +119,12 @@ public:
 
   struct FileStyle {
     FileStyle() : IsActive(false), IgnoreMainLikeFunctions(false) {}
-    FileStyle(SmallVectorImpl<Optional<NamingStyle>> &&Styles,
+    FileStyle(SmallVectorImpl<std::optional<NamingStyle>> &&Styles,
               HungarianNotationOption HNOption, bool IgnoreMainLike)
         : Styles(std::move(Styles)), HNOption(std::move(HNOption)),
           IsActive(true), IgnoreMainLikeFunctions(IgnoreMainLike) {}
 
-    ArrayRef<Optional<NamingStyle>> getStyles() const {
+    ArrayRef<std::optional<NamingStyle>> getStyles() const {
       assert(IsActive);
       return Styles;
     }
@@ -138,7 +138,7 @@ public:
     bool isIgnoringMainLikeFunction() const { return IgnoreMainLikeFunctions; }
 
   private:
-    SmallVector<Optional<NamingStyle>, 0> Styles;
+    SmallVector<std::optional<NamingStyle>, 0> Styles;
     HungarianNotationOption HNOption;
     bool IsActive;
     bool IgnoreMainLikeFunctions;
